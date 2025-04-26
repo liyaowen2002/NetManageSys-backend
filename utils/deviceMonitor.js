@@ -107,7 +107,7 @@ async function heartbeatCheck() {
         deviceStatus[deviceId].status = 'online';
         const detail = `${name}（${ip}）上线`
         broadcastMsg(JSON.stringify({type:'success',msg:'设备状态改变',data:{detail}}))
-        writeNotification(detail,'success',deviceId,deviceStatus[deviceId].location)
+        writeNotification(detail,'success',deviceId,deviceStatus[deviceId].location,null)
       }
     } else {
       // console.log(deviceStatus)
@@ -115,8 +115,8 @@ async function heartbeatCheck() {
         console.log(`来自deviceMonitor：设备 ${name}（${ip}）掉线`);
         deviceStatus[deviceId].status = 'offline';
         const detail = `${name}（${ip}）下线`
-        broadcastMsg(JSON.stringify({type:'success',msg:'设备状态改变',data:{detail}}))
-        writeNotification(detail,'error',deviceId,deviceStatus[deviceId].location)
+        broadcastMsg(JSON.stringify({type:'error',msg:'设备状态改变',data:{detail}}))
+        writeNotification(detail,'error',deviceId,deviceStatus[deviceId].location,null)
       }
     }
   }

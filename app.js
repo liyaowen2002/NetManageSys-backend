@@ -105,6 +105,9 @@ app.use('/deviceConfig',deviceConfigRouter)
 const notificationRouter = require('./api/http/notification')
 app.use('/notification',notificationRouter)
 
+// 拓扑图管理
+const topoRouter = require('./api/http/topoManage')
+app.use('/topoManage',topoRouter)
 
 app.listen(5200,()=>{
     console.log("来自app.js：开始监听5200端口")

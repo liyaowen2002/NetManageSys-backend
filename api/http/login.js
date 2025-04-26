@@ -29,7 +29,7 @@ router.post('',(req,res)=>{
             });
         }
         /** 登录成功设置token值，返回给前端 **/
-        const token = jwt.sign({ userID:result[0].id }, 'secret',{expiresIn:'1d'});
+        const token = jwt.sign({ userID:result[0].id,role:result[0].role,userName:result[0].username,nickName:result[0].nickname }, 'secret',{expiresIn:'1d'});
         return res.status(200).json({
             type:'success',
             msg: "登录成功",

@@ -1,14 +1,16 @@
 const db = require('./dbConnection'); // 数据库模块
 
+// 这里的写入操作者起始使用用户id会更好，但是用id的话会查询要连用户表查询，还要增加用户被删除不存在的情况
+// 所以很麻烦，直接写用户名进去好了
 // 方法一：写入一条通知
-const writeNotification = async (content, level, deviceID, location) => {
+const writeNotification = async (content, level, deviceID, location, operator) => {
   const queryStr = `
-    INSERT INTO notifications (content, level, deviceID, location, time, readIDs)
-    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, JSON_ARRAY())
+    INSERT INTO notifications (content, level, deviceID, location, operator, time, readIDs)
+    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, JSON_ARRAY())
   `;
   
   try {
-    db.query(queryStr, [content, level, deviceID, location],(error, results) => {
+    db.query(queryStr, [content, level, deviceID, location, operator],(error, results) => {
       if(error){
         throw error;
       }
@@ -249,7 +251,7 @@ const getNotificationsByQuery = async (filter, start, end, userID) => {
             resolve([notification,total])
           } else {  
             let queryStr3 = `
-              SELECT notificationID, content, level, time, deviceID, location, readIDs
+              SELECT notificationID, content, level, time, deviceID, location, readIDs, operator
               FROM notifications
               WHERE 1=1
             `;
@@ -375,7 +377,7 @@ const getNotificationsByQuery = async (filter, start, end, userID) => {
           resolve([notification,total])
         } else {  
           let queryStr2 = `
-            SELECT n.notificationID, n.content, n.level, n.time, n.deviceID, d.name AS deviceName, n.readIDs, n.location, l.nameCHN
+            SELECT n.notificationID, n.content, n.level, n.time, n.deviceID, d.name AS deviceName, n.readIDs, n.location, l.nameCHN, n.operator
             FROM notifications n
             LEFT JOIN devices d ON n.deviceID = d.id
             LEFT JOIN locations l ON n.location = l.nameENG
@@ -486,12 +488,25 @@ function getUnreadNotificationsCountByLocation(userID) {
         }
 
         // 根据 status 更新对应的 count
-        if (row.level === 'error') {
-          formattedResults[row.location].error = row.count;
-        } else if (row.level === 'success') {
-          formattedResults[row.location].success = row.count;
+        switch(row.level){
+          case 'error':
+            formattedResults[row.location].error = row.count;
+            break;
+          case 'success':
+            formattedResults[row.location].success = row.count;
+            break;
+          case 'warning':
+            formattedResults[row.location].warning = row.count;
+            break;
+          case 'normal':
+            formattedResults[row.location].normal = row.count;
+            break;
         }
       });
+
+      Object.keys(formattedResults).forEach(key=>{
+        formattedResults[key].total=formattedResults[key].error+formattedResults[key].warning+formattedResults[key].success+formattedResults[key].normal
+      })
 
       // 3. 返回按建筑和状态分类的统计结果
       resolve(formattedResults);

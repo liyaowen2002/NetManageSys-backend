@@ -6,6 +6,7 @@ const global = require('../../global')
 const db = require('../../utils/dbConnection'); // 数据库模块
 const { initializeDevices,getDeviceStatus } = require('../../utils/deviceMonitor'); // 引入 deviceMonitor.js
 const {sendSNMPRequest} = require('../../utils/SNMP_request')
+const { writeNotification } = require('../../utils/notificationManage');
 
 
 const SECRET = "your_jwt_secret_key";
@@ -40,7 +41,7 @@ router.post("/addDevice", async (req, res) => {
   try {
     const isDuplicate = await checkDuplicateIP(ip);
     if(isDuplicate) {
-      return res.status(200).json({ type:'error',msg:'设备已存在' });
+      return res.status(500).json({ type:'error',msg:'设备已存在' });
     }else{
       const oids = [
         {
@@ -93,7 +94,8 @@ router.post("/addDevice", async (req, res) => {
 // 确认添加设备请求
 router.post("/addConfirm", (req, res) => {
   const { model, name, location, ip, token, type } = req.body;
-
+  const decoded = jwt.verify(req.headers["authorization"]?.split(" ")[1], 'secret');  // 替换为你实际使用的密钥
+  console.log(decoded)
   // 校验 Token
   try {
     jwt.verify(token, SECRET);
@@ -115,6 +117,7 @@ router.post("/addConfirm", (req, res) => {
           throw new Error('数据插入失败:', err)
         }
         await initializeDevices()
+        writeNotification(`${name}（${ip}）设备已添加`,'normal',results.insertId,null,`${decoded.nickName}(${decoded.userName})`)
         return res.status(200).json({ type:'success',msg: "设备添加成功" });
       }
     );
@@ -132,6 +135,7 @@ router.get("/getLatestDevicesList",(req,res)=>{
 // 单个移除设备
 router.delete("/removeDevice", async (req, res) => {
   const { id } = req.query; // 获取请求中的 id
+  const decoded = jwt.verify(req.headers["authorization"]?.split(" ")[1], 'secret');  // 替换为你实际使用的密钥
 
   if (!id) {
     return res.status(400).json({ type: 'error', msg: "必须提供设备 ID" });
@@ -140,14 +144,17 @@ router.delete("/removeDevice", async (req, res) => {
   try {
     // 执行删除操作
     db.query("DELETE FROM devices WHERE id = ?", [id],
-      (err,results)=>{
+      async (err,results)=>{
         // 如果没有删除到任何记录，说明 ID 不存在
         if (results.affectedRows === 0) {
           return res.status(404).json({ type: 'error', msg: "设备未找到" });
         }
         // 删除成功，返回响应
-        res.status(200).json({ type: 'success', msg: "设备已成功删除" });
-        initializeDevices()
+        const devicesList = getDeviceStatus()
+        writeNotification(`设备${devicesList[id].name}（${devicesList[id].ip}）被删除`,'warning',id,devicesList[id].location,`${decoded.nickName}(${decoded.userName})`)
+
+        await initializeDevices()
+        return res.status(200).json({ type: 'success', msg: "设备已成功删除" });
       }
     );
   } catch (error) {
@@ -159,12 +166,16 @@ router.delete("/removeDevice", async (req, res) => {
 // 批量移除设备
 router.delete("/removeDeviceBatch", async (req, res) => {
   const { ids } = req.query; // 获取请求中的 ids，假设它是一个逗号分隔的字符串，如 '1,2,3'
+  // 1. 验证 JWT 并获取 userID
+  const decoded = jwt.verify(req.headers["authorization"]?.split(" ")[1], 'secret');  // 替换为你实际使用的密钥
+
 
   if (!ids) {
     return res.status(400).json({ type: 'error', msg: "必须提供设备 ID" });
   }
 
   try {
+
     // 将 ids 转换为数组并清洗每个值，确保它们是整数
     const idArray = ids.split(',').map(id => {
       const parsedId = parseInt(id.trim(), 10);
@@ -183,7 +194,7 @@ router.delete("/removeDeviceBatch", async (req, res) => {
       idArray, // 传递 idArray 作为参数
       async (err,results)=>{
         if(err){
-          throw new Error("数据库删除失败:", error)
+          throw new Error("数据库删除失败:", err)
         }
 
         // 检查 affectedRows
@@ -191,9 +202,14 @@ router.delete("/removeDeviceBatch", async (req, res) => {
           return res.status(404).json({ type: 'error', msg: "没有找到匹配的设备" });
         }
 
+
+        // 删除成功，返回响应
+        const devicesList = getDeviceStatus()
+        idArray.forEach(id => {
+          writeNotification(`设备${devicesList[id].name}（${devicesList[id].ip}）被删除`,'warning',id,devicesList[id].location,`${decoded.nickName}(${decoded.userName})`)
+        });
         // 根据需求在这里重新初始化设备列表
         await initializeDevices();
-        // 删除成功，返回响应
         res.status(200).json({ type: 'success', msg: "设备已成功删除" });
 
       }
